@@ -18,7 +18,7 @@ class AppProvider with ChangeNotifier {
   int get totalPengeluaran => _transaksiList.where((t) => t.tipe == 'KELUAR').fold(0, (sum, t) => sum + t.nominal);
   int get saldoBersih => totalPemasukan - totalPengeluaran;
 
-  void loadData() async {
+  Future<void> loadData() async {
     if (kIsWeb) {
       if (_produkList.isEmpty) {
         _produkList = [
@@ -32,6 +32,7 @@ class AppProvider with ChangeNotifier {
     } else {
       _bahanList = await _db.getBahan();
       _produkList = await _db.getProduk();
+      // PENTING: Ambil data transaksi terbaru dari DB
       _transaksiList = await _db.getTransaksi();
     }
     notifyListeners();
@@ -42,38 +43,30 @@ class AppProvider with ChangeNotifier {
     if (isEdit) {
       int index = _produkList.indexWhere((element) => element.id == p.id);
       if (index != -1) {
-        _produkList[index] = p;
         if (!kIsWeb) await _db.updateProduk(p);
       }
     } else {
-      // Logic ID Baru
-      int newId = kIsWeb ? DateTime.now().millisecondsSinceEpoch : 0;
       if (!kIsWeb) {
-        newId = await _db.insertProduk(p); // Dapat ID dari DB
+        await _db.insertProduk(p);
+      } else {
+        // Dummy web logic
+        int newId = DateTime.now().millisecondsSinceEpoch;
+        Produk baru = Produk(id: newId, nama: p.nama, kategori: p.kategori, hargaModal: p.hargaModal, hargaJual: p.hargaJual, stok: p.stok);
+        _produkList.add(baru);
       }
-      
-      Produk produkBaru = Produk(
-        id: newId, 
-        nama: p.nama, 
-        kategori: p.kategori, 
-        hargaModal: p.hargaModal, 
-        hargaJual: p.hargaJual, 
-        stok: p.stok
-      );
-      _produkList.add(produkBaru);
     }
-    notifyListeners();
+    // Refresh semua data untuk memastikan ID sinkron
+    await loadData();
   }
 
   Future<void> hapusProduk(int id) async {
-    _produkList.removeWhere((p) => p.id == id);
     if (!kIsWeb) await _db.deleteProduk(id);
-    notifyListeners();
+    await loadData();
   }
 
   // --- CRUD BAHAN ---
   Future<void> belanjaBahan(String nama, String satuan, int jumlah, int totalHarga) async {
-    // Siapkan data transaksi (tanpa ID dulu)
+    // 1. Simpan Transaksi
     Transaksi trxDraft = Transaksi(
       tipe: 'KELUAR', 
       deskripsi: 'Beli $jumlah $satuan $nama', 
@@ -83,53 +76,33 @@ class AppProvider with ChangeNotifier {
       uangDiterima: totalHarga
     );
 
-    // INSERT & DAPATKAN ID
-    int trxId = kIsWeb ? DateTime.now().millisecondsSinceEpoch : 0;
-    if (!kIsWeb) {
-      trxId = await _db.insertTransaksi(trxDraft);
-    }
-
-    // Buat objek final dengan ID yang benar
-    Transaksi trxFinal = Transaksi(
-      id: trxId,
-      tipe: trxDraft.tipe,
-      deskripsi: trxDraft.deskripsi,
-      nominal: trxDraft.nominal,
-      tanggal: trxDraft.tanggal,
-      metodeBayar: trxDraft.metodeBayar,
-      uangDiterima: trxDraft.uangDiterima
-    );
+    if (!kIsWeb) await _db.insertTransaksi(trxDraft);
     
-    // Update Stok Bahan
+    // 2. Update Stok Bahan
+    // Kita load dulu bahan terbaru dari DB agar tidak duplikat
+    await loadData(); 
+    
     int index = _bahanList.indexWhere((b) => b.nama.toLowerCase() == nama.toLowerCase());
     if (index != -1) {
       BahanBaku update = _bahanList[index];
       update.stok += jumlah;
       update.hargaBeliTerakhir = (totalHarga / jumlah).round();
-      _bahanList[index] = update; 
       if (!kIsWeb) await _db.updateBahan(update);
     } else {
-      int bahanId = kIsWeb ? DateTime.now().millisecondsSinceEpoch : 0;
-      BahanBaku baruDraft = BahanBaku(id: null, nama: nama, satuan: satuan, stok: jumlah, hargaBeliTerakhir: (totalHarga / jumlah).round());
-      if (!kIsWeb) {
-        bahanId = await _db.insertBahan(baruDraft);
-      }
-      BahanBaku baru = BahanBaku(id: bahanId, nama: nama, satuan: satuan, stok: jumlah, hargaBeliTerakhir: (totalHarga / jumlah).round());
-      _bahanList.add(baru);
+      BahanBaku baru = BahanBaku(id: null, nama: nama, satuan: satuan, stok: jumlah, hargaBeliTerakhir: (totalHarga / jumlah).round());
+      if (!kIsWeb) await _db.insertBahan(baru);
     }
 
-    // Masukkan transaksi yang SUDAH PUNYA ID ke list
-    _transaksiList.insert(0, trxFinal);
-    notifyListeners();
+    // 3. FORCE REFRESH agar tampil di history
+    await loadData();
   }
 
   Future<void> hapusBahan(int id) async {
-    _bahanList.removeWhere((b) => b.id == id);
     if (!kIsWeb) await _db.deleteBahan(id);
-    notifyListeners();
+    await loadData();
   }
 
-  // --- TRANSAKSI KASIR UPDATE ---
+  // --- TRANSAKSI KASIR (FIX HISTORY KOSONG) ---
   Future<void> bayarTransaksi(Map<Produk, int> cart, String metode, int uangDiterima, String? buktiFoto) async {
     int totalUang = 0;
     List<String> detailItems = [];
@@ -138,10 +111,8 @@ class AppProvider with ChangeNotifier {
       Produk p = entry.key;
       int qty = entry.value;
       
-      int index = _produkList.indexOf(p);
-      if (index != -1) {
-        _produkList[index].stok -= qty;
-      }
+      // Update stok produk
+      p.stok -= qty;
       if (!kIsWeb) await _db.updateProduk(p);
       
       totalUang += (p.hargaJual * qty);
@@ -150,8 +121,7 @@ class AppProvider with ChangeNotifier {
 
     String deskripsi = detailItems.join(", ");
 
-    // Siapkan Draft
-    Transaksi trxDraft = Transaksi(
+    Transaksi trx = Transaksi(
       tipe: 'MASUK', 
       deskripsi: deskripsi, 
       nominal: totalUang, 
@@ -161,41 +131,21 @@ class AppProvider with ChangeNotifier {
       buktiFoto: buktiFoto
     );
 
-    // INSERT & DAPATKAN ID (Solusi Bug Hapus)
-    int trxId = kIsWeb ? DateTime.now().millisecondsSinceEpoch : 0;
-    if (!kIsWeb) {
-      trxId = await _db.insertTransaksi(trxDraft);
-    }
+    // Simpan ke DB
+    if (!kIsWeb) await _db.insertTransaksi(trx);
 
-    // Buat Final Object
-    Transaksi trxFinal = Transaksi(
-      id: trxId, // ID SUDAH TERISI!
-      tipe: trxDraft.tipe,
-      deskripsi: trxDraft.deskripsi,
-      nominal: trxDraft.nominal,
-      tanggal: trxDraft.tanggal,
-      metodeBayar: trxDraft.metodeBayar,
-      uangDiterima: trxDraft.uangDiterima,
-      buktiFoto: trxDraft.buktiFoto
-    );
-
-    _transaksiList.insert(0, trxFinal);
-    notifyListeners();
+    // KUNCI PERBAIKAN: Panggil loadData() untuk menarik ulang data dari DB ke Layar
+    await loadData();
   }
 
   // --- EDIT & HAPUS TRANSAKSI ---
   Future<void> hapusTransaksi(int id) async {
-    _transaksiList.removeWhere((t) => t.id == id);
     if (!kIsWeb) await _db.deleteTransaksi(id);
-    notifyListeners();
+    await loadData();
   }
 
   Future<void> updateTransaksi(Transaksi t) async {
-    int index = _transaksiList.indexWhere((item) => item.id == t.id);
-    if (index != -1) {
-      _transaksiList[index] = t;
-      if (!kIsWeb) await _db.updateTransaksi(t);
-      notifyListeners();
-    }
+    if (!kIsWeb) await _db.updateTransaksi(t);
+    await loadData();
   }
 }

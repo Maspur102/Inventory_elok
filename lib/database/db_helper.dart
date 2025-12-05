@@ -18,20 +18,21 @@ class DbHelper {
   }
 
   Future<Database> _initDb() async {
-    String path = join(await getDatabasesPath(), 'elok_alfa_v4.db'); 
+    // UPDATE: Ganti ke v5 agar database ter-reset total dan tabel pasti ada
+    String path = join(await getDatabasesPath(), 'elok_alfa_v5.db'); 
     return await openDatabase(
       path,
       version: 1,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE bahan(id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, satuan TEXT, stok INTEGER, harga_beli INTEGER)');
         await db.execute('CREATE TABLE produk(id INTEGER PRIMARY KEY AUTOINCREMENT, nama TEXT, kategori TEXT, harga_modal INTEGER, harga_jual INTEGER, stok INTEGER)');
+        // Pastikan tabel transaksi dibuat lengkap
         await db.execute('CREATE TABLE transaksi(id INTEGER PRIMARY KEY AUTOINCREMENT, tipe TEXT, deskripsi TEXT, nominal INTEGER, tanggal TEXT, metode_bayar TEXT, uang_diterima INTEGER, bukti_foto TEXT)');
       },
     );
   }
 
   // --- CRUD BAHAN ---
-  // Ubah return void jadi Future<int> agar kita tahu ID barunya
   Future<int> insertBahan(BahanBaku b) async {
     final db = await database;
     if (db != null) return await db.insert('bahan', b.toMap());
@@ -74,7 +75,6 @@ class DbHelper {
   }
 
   // --- CRUD TRANSAKSI ---
-  // Ubah return jadi Future<int> (PENTING)
   Future<int> insertTransaksi(Transaksi t) async {
     final db = await database;
     if (db != null) return await db.insert('transaksi', t.toMap());
@@ -83,6 +83,7 @@ class DbHelper {
   Future<List<Transaksi>> getTransaksi() async {
     final db = await database;
     if (db == null) return [];
+    // Urutkan dari yang terbaru (DESC)
     final maps = await db.query('transaksi', orderBy: 'id DESC');
     return List.generate(maps.length, (i) => Transaksi.fromMap(maps[i]));
   }
