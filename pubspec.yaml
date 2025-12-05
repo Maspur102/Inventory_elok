@@ -1,0 +1,38 @@
+name: elokalfa
+description: Aplikasi POS Kripik Pisang.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management (Otak Aplikasi)
+  provider: ^6.1.1
+
+  # Database Lokal (Penyimpanan)
+  sqflite: ^2.3.0
+  path: ^1.8.3
+
+  # UI & Grafik
+  intl: ^0.19.0
+  fl_chart: ^0.66.0
+  google_fonts: ^6.1.0
+  
+  # Fitur Tambahan
+  uuid: ^4.3.3
+  path_provider: ^2.1.2
+  csv: ^6.0.0
+  image_picker: ^1.0.7
+  open_file: ^3.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
