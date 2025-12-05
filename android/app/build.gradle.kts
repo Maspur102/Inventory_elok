@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -10,22 +11,17 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
-    sourceSets {
-        getByName("main").java.srcDirs("src/main/kotlin")
-    }
-
-    defaultConfig {
+  defaultConfig {
         applicationId = "com.example.elokalfa"
-        // Update minSdk ke 21 agar support plugin image_picker
-        minSdk = 21
+        minSdk = 21  // <--- PASTIKAN INI 21
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -33,7 +29,8 @@ android {
 
     buildTypes {
         release {
-            // Menggunakan signing debug agar build release bisa jalan tanpa key khusus
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
