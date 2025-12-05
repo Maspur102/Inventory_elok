@@ -36,10 +36,8 @@ class MyApp extends StatelessWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
         useMaterial3: true,
-        cardTheme: CardTheme(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
+        // BAGIAN YANG DIHAPUS: cardTheme (Penyebab Error)
+        // Kita pakai default Material 3 saja, sudah bagus kok!
       ),
       home: const MainScreen(),
     );
@@ -521,7 +519,7 @@ class HalamanLaporan extends StatelessWidget {
                         runSpacing: 10,
                         alignment: WrapAlignment.spaceEvenly,
                         children: [
-                          // Tombol Struk (DIKEMBALIKAN)
+                          // Tombol Struk
                           ElevatedButton.icon(
                             icon: const Icon(Icons.receipt),
                             label: const Text("Struk"),

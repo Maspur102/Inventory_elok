@@ -26,8 +26,21 @@ jobs:
     - name: Install Dependencies
       run: flutter pub get
 
-    - name: Fix Android Permissions
-      run: chmod +x android/gradlew
+    # --- BAGIAN AJAIB: MEMBUAT ULANG ANDROID DI SERVER ---
+    - name: Regenerate Android Project
+      run: |
+        rm -rf android
+        flutter create --platforms=android .
+
+    # --- BAGIAN AJAIB 2: SETTING VERSI ANDROID OTOMATIS ---
+    - name: Fix MinSDK to 21
+      run: |
+        # Mencari settingan versi dan memaksanya jadi 21 agar support kamera/galeri
+        find android -name "build.gradle" -exec sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' {} +
+        find android -name "build.gradle" -exec sed -i 's/minSdkVersion 16/minSdkVersion 21/g' {} +
+        find android -name "build.gradle" -exec sed -i 's/minSdkVersion 19/minSdkVersion 21/g' {} +
+        # Untuk Kotlin DSL (jika ada)
+        find android -name "build.gradle.kts" -exec sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' {} +
 
     - name: Build APK
       run: flutter build apk --release --no-tree-shake-icons
