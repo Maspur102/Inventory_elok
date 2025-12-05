@@ -3,6 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,12 +21,12 @@ jobs:
     - name: Set up Flutter
       uses: subosito/flutter-action@v2
       with:
-        channel: 'stable' # Gunakan versi stabil terbaru
+        channel: 'stable'
 
     - name: Install Dependencies
       run: flutter pub get
 
-    - name: Fix Android Permissions # Ini kuncinya!
+    - name: Fix Android Permissions
       run: chmod +x android/gradlew
 
     - name: Build APK
@@ -36,3 +37,4 @@ jobs:
       with:
         name: app-release
         path: build/app/outputs/flutter-apk/app-release.apk
+```ascii
