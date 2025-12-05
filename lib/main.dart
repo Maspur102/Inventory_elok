@@ -36,8 +36,10 @@ class MyApp extends StatelessWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
         useMaterial3: true,
-        // BAGIAN YANG DIHAPUS: cardTheme (Penyebab Error)
-        // Kita pakai default Material 3 saja, sudah bagus kok!
+        cardTheme: CardTheme(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
       ),
       home: const MainScreen(),
     );
@@ -316,7 +318,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
-                onPressed: () {
+                onPressed: () async { // UBAH KE ASYNC
                   int uangFinal = metode == "Tunai" ? (int.tryParse(uangCtrl.text) ?? 0) : totalTagihan;
                   if (metode == "Tunai" && uangFinal < totalTagihan) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Uang kurang!"), backgroundColor: Colors.red));
@@ -326,10 +328,16 @@ class _HalamanKasirState extends State<HalamanKasir> {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Harap upload bukti transfer!"), backgroundColor: Colors.red));
                     return;
                   }
-                  provider.bayarTransaksi(cart, metode, uangFinal, pickedImage?.path);
-                  setState(() => cart.clear());
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pembayaran Berhasil!")));
+                  
+                  // PERBAIKAN UTAMA: Gunakan Map.from(cart) agar data tidak hilang saat cart.clear()
+                  // Dan gunakan await agar selesai proses dulu
+                  await provider.bayarTransaksi(Map.from(cart), metode, uangFinal, pickedImage?.path);
+                  
+                  if (context.mounted) {
+                    setState(() => cart.clear());
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pembayaran Berhasil!")));
+                  }
                 },
                 child: const Text("PROSES BAYAR"),
               )
