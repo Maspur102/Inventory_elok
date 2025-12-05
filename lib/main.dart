@@ -1,5 +1,3 @@
-// Kode ini SAMA dengan yang Anda berikan, karena secara sintaksis sudah benar untuk versi Flutter modern.
-// Perbaikan utamanya adalah membersihkan build cache.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart'; 
 import 'package:flutter/foundation.dart' show kIsWeb;
+
+// Asumsi model dan provider diimpor dari file lokal
 import 'providers/app_provider.dart';
 import 'models/models.dart';
 
@@ -38,11 +38,11 @@ class MyApp extends StatelessWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
         useMaterial3: true,
-        // BARIS 39: CardTheme sudah benar untuk useMaterial3: true
-        cardTheme: CardTheme(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
+        // BAGIAN CARDTHEME DIHAPUS UNTUK MENGHINDARI ERROR BUILD
+        // cardTheme: CardTheme(
+        //   elevation: 4,
+        //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        // ),
       ),
       home: const MainScreen(),
     );
@@ -321,7 +321,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
-                onPressed: () async { // UBAH KE ASYNC
+                onPressed: () async { 
                   int uangFinal = metode == "Tunai" ? (int.tryParse(uangCtrl.text) ?? 0) : totalTagihan;
                   if (metode == "Tunai" && uangFinal < totalTagihan) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Uang kurang!"), backgroundColor: Colors.red));
@@ -332,8 +332,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
                     return;
                   }
                   
-                  // PERBAIKAN UTAMA: Gunakan Map.from(cart) agar data tidak hilang saat cart.clear()
-                  // Dan gunakan await agar selesai proses dulu
+                  // Gunakan Map.from(cart)
                   await provider.bayarTransaksi(Map.from(cart), metode, uangFinal, pickedImage?.path);
                   
                   if (context.mounted) {
@@ -370,6 +369,7 @@ class HalamanInventaris extends StatelessWidget {
   }
 }
 
+// Lanjutan dari ListProdukView (ditemukan di potongan kode awal)
 class ListProdukView extends StatelessWidget {
   const ListProdukView({super.key});
   @override
@@ -379,4 +379,363 @@ class ListProdukView extends StatelessWidget {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showFormProduk(context, null,
+        onPressed: () => _showFormProduk(context, null, provider), // LENGKAPI PROMPT AWAL
+        label: const Text("Tambah Produk"),
+        icon: const Icon(Icons.add),
+        backgroundColor: const Color(0xFF00E676),
+        foregroundColor: Colors.black,
+      ),
+      body: provider.produkList.isEmpty
+        ? const Center(child: Text("Belum ada produk."))
+        : ListView.builder(
+            padding: const EdgeInsets.only(bottom: 80, top: 8),
+            itemCount: provider.produkList.length,
+            itemBuilder: (ctx, i) {
+              final p = provider.produkList[i];
+              return Card(
+                color: const Color(0xFF252525),
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: ListTile(
+                  title: Text(p.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Kategori: ${p.kategori}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text("Beli: ${currency.format(p.hargaBeli)} | Jual: ${currency.format(p.hargaJual)}", style: const TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: p.stok < 5 ? Colors.redAccent.withOpacity(0.3) : const Color(0xFF00E676).withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
+                    child: Text("Stok: ${p.stok}", style: TextStyle(fontWeight: FontWeight.bold, color: p.stok < 5 ? Colors.red : const Color(0xFF00E676))),
+                  ),
+                  onTap: () => _showFormProduk(context, p, provider),
+                ),
+              );
+            },
+          ),
+    );
+  }
+
+  void _showFormProduk(BuildContext context, Produk? produk, AppProvider provider) {
+    final isEdit = produk != null;
+    final namaCtrl = TextEditingController(text: produk?.nama ?? '');
+    final kategoriCtrl = TextEditingController(text: produk?.kategori ?? '');
+    final hargaBeliCtrl = TextEditingController(text: produk?.hargaBeli.toString() ?? '');
+    final hargaJualCtrl = TextEditingController(text: produk?.hargaJual.toString() ?? '');
+    final stokCtrl = TextEditingController(text: produk?.stok.toString() ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isEdit ? "Edit Produk: ${produk.nama}" : "Tambah Produk Baru"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: "Nama Produk", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: kategoriCtrl, decoration: const InputDecoration(labelText: "Kategori", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: hargaBeliCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga Beli (Rp)", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: hargaJualCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga Jual (Rp)", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: stokCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Stok Awal", border: OutlineInputBorder(), hintText: isEdit ? 'Hanya bisa diisi sekali' : null), enabled: !isEdit),
+            ],
+          ),
+        ),
+        actions: [
+          if (isEdit) 
+            TextButton(
+              onPressed: () async {
+                await provider.hapusProduk(produk.id);
+                if (context.mounted) Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Produk dihapus!"), backgroundColor: Colors.red));
+              },
+              child: const Text("Hapus", style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
+            onPressed: () async {
+              if (namaCtrl.text.isEmpty || hargaJualCtrl.text.isEmpty) return;
+
+              final newProduk = Produk(
+                id: produk?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                nama: namaCtrl.text,
+                kategori: kategoriCtrl.text.isEmpty ? 'Umum' : kategoriCtrl.text,
+                hargaBeli: int.tryParse(hargaBeliCtrl.text) ?? 0,
+                hargaJual: int.tryParse(hargaJualCtrl.text) ?? 0,
+                stok: int.tryParse(stokCtrl.text) ?? (produk?.stok ?? 0),
+              );
+
+              if (isEdit) {
+                await provider.updateProduk(newProduk);
+              } else {
+                await provider.tambahProduk(newProduk);
+              }
+
+              if (context.mounted) Navigator.pop(ctx);
+            },
+            child: Text(isEdit ? "Simpan Perubahan" : "Tambah"),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class ListBahanView extends StatelessWidget {
+  const ListBahanView({super.key});
+  @override
+  Widget build(BuildContext context) {
+    // Asumsi ada model BahanBaku dan fungsi di AppProvider
+    final provider = Provider.of<AppProvider>(context);
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+    return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showFormBahan(context, null, provider),
+        label: const Text("Tambah Bahan"),
+        icon: const Icon(Icons.add),
+        backgroundColor: const Color(0xFF03DAC6),
+        foregroundColor: Colors.black,
+      ),
+      body: provider.bahanList.isEmpty
+        ? const Center(child: Text("Belum ada bahan baku."))
+        : ListView.builder(
+            padding: const EdgeInsets.only(bottom: 80, top: 8),
+            itemCount: provider.bahanList.length,
+            itemBuilder: (ctx, i) {
+              final b = provider.bahanList[i];
+              return Card(
+                color: const Color(0xFF252525),
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: ListTile(
+                  title: Text(b.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("Harga: ${currency.format(b.hargaBeli)} / ${b.satuan}", style: const TextStyle(fontSize: 12)),
+                  trailing: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: b.stok < 5 ? Colors.redAccent.withOpacity(0.3) : const Color(0xFF03DAC6).withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
+                    child: Text("Stok: ${b.stok} ${b.satuan}", style: TextStyle(fontWeight: FontWeight.bold, color: b.stok < 5 ? Colors.red : const Color(0xFF03DAC6))),
+                  ),
+                  onTap: () => _showFormBahan(context, b, provider),
+                ),
+              );
+            },
+          ),
+    );
+  }
+
+  void _showFormBahan(BuildContext context, BahanBaku? bahan, AppProvider provider) {
+    // Implementasi Form Bahan Baku (asumsi ada model BahanBaku di models.dart)
+    final isEdit = bahan != null;
+    final namaCtrl = TextEditingController(text: bahan?.nama ?? '');
+    final hargaBeliCtrl = TextEditingController(text: bahan?.hargaBeli.toString() ?? '');
+    final stokCtrl = TextEditingController(text: bahan?.stok.toString() ?? '');
+    final satuanCtrl = TextEditingController(text: bahan?.satuan ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isEdit ? "Edit Bahan: ${bahan.nama}" : "Tambah Bahan Baku"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: "Nama Bahan", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: hargaBeliCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga Beli (Rp)", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: stokCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Stok", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: satuanCtrl, decoration: const InputDecoration(labelText: "Satuan (contoh: kg, liter)", border: OutlineInputBorder())),
+            ],
+          ),
+        ),
+        actions: [
+          if (isEdit) 
+            TextButton(
+              onPressed: () async {
+                await provider.hapusBahan(bahan.id);
+                if (context.mounted) Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bahan dihapus!"), backgroundColor: Colors.red));
+              },
+              child: const Text("Hapus", style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF03DAC6), foregroundColor: Colors.black),
+            onPressed: () async {
+              if (namaCtrl.text.isEmpty || hargaBeliCtrl.text.isEmpty) return;
+
+              final newBahan = BahanBaku(
+                id: bahan?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                nama: namaCtrl.text,
+                hargaBeli: int.tryParse(hargaBeliCtrl.text) ?? 0,
+                stok: double.tryParse(stokCtrl.text) ?? 0,
+                satuan: satuanCtrl.text.isEmpty ? 'unit' : satuanCtrl.text,
+              );
+
+              if (isEdit) {
+                await provider.updateBahan(newBahan);
+              } else {
+                await provider.tambahBahan(newBahan);
+              }
+
+              if (context.mounted) Navigator.pop(ctx);
+            },
+            child: Text(isEdit ? "Simpan Perubahan" : "Tambah"),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+// --- TAB 3: LAPORAN ---
+class HalamanLaporan extends StatelessWidget {
+  const HalamanLaporan({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<AppProvider>(context);
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+    // Asumsi ada logic untuk menghitung total pendapatan/pengeluaran di provider
+    final totalPendapatan = provider.transaksiList.where((t) => t.tipe == 'Penjualan').fold<int>(0, (sum, item) => sum + item.jumlah);
+    final totalPengeluaran = provider.transaksiList.where((t) => t.tipe == 'Pembelian Bahan').fold<int>(0, (sum, item) => sum + item.jumlah);
+    final labaBersih = totalPendapatan - totalPengeluaran;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("LAPORAN & ANALISIS")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // RINGKASAN KEUANGAN
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Ringkasan Keuangan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white70)),
+                  const Divider(color: Colors.white10),
+                  _buildSummaryRow("Total Penjualan", totalPendapatan, Colors.green),
+                  _buildSummaryRow("Total Pembelian Bahan", totalPengeluaran, Colors.red),
+                  const Divider(color: Colors.white10, height: 20),
+                  _buildSummaryRow("Laba Bersih", labaBersih, labaBersih >= 0 ? const Color(0xFF00E676) : Colors.redAccent, isBold: true),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // RIWAYAT TRANSAKSI
+            const Text("Riwayat Transaksi Terakhir", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white70)),
+            const Divider(color: Colors.white10),
+            provider.transaksiList.isEmpty
+              ? const Padding(padding: EdgeInsets.all(16), child: Center(child: Text("Belum ada transaksi.")))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: provider.transaksiList.length > 10 ? 10 : provider.transaksiList.length, // Tampilkan 10 transaksi terakhir
+                  itemBuilder: (ctx, i) {
+                    final t = provider.transaksiList[i];
+                    final isPenjualan = t.tipe == 'Penjualan';
+                    return ListTile(
+                      leading: Icon(isPenjualan ? Icons.point_of_sale : Icons.shopping_bag, color: isPenjualan ? Colors.green : Colors.redAccent),
+                      title: Text("${t.tipe} (${t.metode})"),
+                      subtitle: Text(DateFormat('dd MMM yyyy, HH:mm').format(t.tanggal)),
+                      trailing: Text(
+                        "${isPenjualan ? '+' : '-'} ${currency.format(t.jumlah)}",
+                        style: TextStyle(fontWeight: FontWeight.bold, color: isPenjualan ? Colors.green : Colors.redAccent),
+                      ),
+                    );
+                  },
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String title, int amount, Color color, {bool isBold = false}) {
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title, style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(currency.format(amount), style: TextStyle(fontSize: 16, color: color, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+        ],
+      ),
+    );
+  }
+}
+
+// --- ASUMSI MODEL (harus ada di file models/models.dart) ---
+// Note: Karena saya tidak melihat isi files models/models.dart dan providers/app_provider.dart,
+// saya hanya bisa mengasumsikan strukturnya. Anda harus memastikan file tersebut ada dan memiliki kelas
+// Produk, BahanBaku, dan Transaksi, serta fungsi tambah/update/hapus di AppProvider.
+
+/*
+// Contoh Asumsi Struktur Model:
+class Produk {
+  final String id;
+  final String nama;
+  final String kategori;
+  final int hargaBeli;
+  final int hargaJual;
+  final int stok; // harusnya diubah jika ingin update stok
+
+  Produk({required this.id, required this.nama, required this.kategori, required this.hargaBeli, required this.hargaJual, required this.stok});
+}
+
+class BahanBaku {
+  final String id;
+  final String nama;
+  final int hargaBeli;
+  final double stok;
+  final String satuan;
+
+  BahanBaku({required this.id, required this.nama, required this.hargaBeli, required this.stok, required this.satuan});
+}
+
+class Transaksi {
+  final String id;
+  final String tipe; // 'Penjualan' atau 'Pembelian Bahan'
+  final int jumlah;
+  final String metode;
+  final DateTime tanggal;
+
+  Transaksi({required this.id, required this.tipe, required this.jumlah, required this.metode, required this.tanggal});
+}
+
+// Contoh Asumsi Struktur AppProvider:
+class AppProvider extends ChangeNotifier {
+  List<Produk> produkList = [];
+  List<BahanBaku> bahanList = [];
+  List<Transaksi> transaksiList = [];
+
+  void loadData() {
+    // Logic untuk memuat data dari database/storage
+    // ...
+  }
+  Future<void> tambahProduk(Produk p) async { /* ... */ notifyListeners(); }
+  Future<void> updateProduk(Produk p) async { /* ... */ notifyListeners(); }
+  Future<void> hapusProduk(String id) async { /* ... */ notifyListeners(); }
+  
+  Future<void> tambahBahan(BahanBaku b) async { /* ... */ notifyListeners(); }
+  Future<void> updateBahan(BahanBaku b) async { /* ... */ notifyListeners(); }
+  Future<void> hapusBahan(String id) async { /* ... */ notifyListeners(); }
+
+  Future<void> bayarTransaksi(Map<Produk, int> cart, String metode, int jumlahBayar, String? buktiPath) async { 
+    // Logic untuk memproses pembayaran, mengurangi stok, dan mencatat transaksi.
+    // ...
+    notifyListeners();
+  }
+}
+*/
