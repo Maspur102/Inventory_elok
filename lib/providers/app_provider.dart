@@ -5,6 +5,7 @@ import '../database/db_helper.dart';
 import '../models/models.dart';
 
 class AppProvider extends ChangeNotifier {
+  // Asumsi DBHelper sudah diimplementasikan di lib/database/db_helper.dart
   final DBHelper _dbHelper = DBHelper();
   
   List<Produk> _produkList = [];
@@ -13,13 +14,14 @@ class AppProvider extends ChangeNotifier {
 
   List<Produk> get produkList => _produkList;
   List<BahanBaku> get bahanList => _bahanList;
-  List<Transaksi> get transaksiList => _transaksiList.reversed.toList(); // Transaksi terbaru di atas
+  List<Transaksi> get transaksiList => _transaksiList.reversed.toList(); 
 
   int get totalPemasukan => _transaksiList.where((t) => t.tipe == 'MASUK').fold(0, (sum, item) => sum + item.nominal);
   int get totalPengeluaran => _transaksiList.where((t) => t.tipe == 'KELUAR').fold(0, (sum, item) => sum + item.nominal);
   int get saldoBersih => totalPemasukan - totalPengeluaran;
 
   Future<void> loadData() async {
+    // Pastikan _dbHelper.openDb() ada dan berfungsi
     await _dbHelper.openDb();
     _produkList = await _dbHelper.getProdukList();
     _bahanList = await _dbHelper.getBahanList();
@@ -35,7 +37,7 @@ class AppProvider extends ChangeNotifier {
       produk.id = DateTime.now().millisecondsSinceEpoch.toString();
       await _dbHelper.insertProduk(produk);
     }
-    await loadData(); // Reload data
+    await loadData(); 
   }
 
   Future<void> hapusProduk(String id) async {
@@ -50,12 +52,15 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> belanjaBahan(String nama, String satuan, int jumlah, int totalHarga) async {
-    final BahanBaku? existingBahan = _bahanList.firstWhere((b) => b.nama.toLowerCase() == nama.toLowerCase(), orElse: () => BahanBaku(nama: '', satuan: '', stok: 0, hargaBeliTerakhir: 0));
+    // FIX NULL SAFETY: Gunakan where/firstWhere yang mengembalikan elemen null, 
+    // lalu periksa secara eksplisit sebelum mengakses properti.
+    final existingBahan = _bahanList.where((b) => b.nama.toLowerCase() == nama.toLowerCase()).toList();
     
-    if (existingBahan.id != null) {
-      existingBahan.stok += jumlah.toDouble();
-      existingBahan.hargaBeliTerakhir = totalHarga;
-      await _dbHelper.updateBahan(existingBahan);
+    if (existingBahan.isNotEmpty) {
+      final bahanToUpdate = existingBahan.first;
+      bahanToUpdate.stok += jumlah.toDouble();
+      bahanToUpdate.hargaBeliTerakhir = totalHarga;
+      await _dbHelper.updateBahan(bahanToUpdate);
     } else {
       final newBahan = BahanBaku(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -73,7 +78,7 @@ class AppProvider extends ChangeNotifier {
       deskripsi: 'Pembelian Bahan: $nama ($jumlah $satuan)',
       nominal: totalHarga,
       tanggal: DateTime.now().toIso8601String(),
-      metodeBayar: 'Tunai', // Default tunai untuk pembelian
+      metodeBayar: 'Tunai', 
     );
     await _dbHelper.insertTransaksi(transaksi);
 
@@ -91,7 +96,7 @@ class AppProvider extends ChangeNotifier {
     await loadData();
   }
   
-  // --- LOGIC PEMBAYARAN KASIR (PERBAIKAN UTAMA) ---
+  // --- LOGIC PEMBAYARAN KASIR ---
   Future<void> bayarTransaksi(Map<Produk, int> cart, String metode, int uangDiterima, String? buktiPath) async {
     if (cart.isEmpty) return;
 
@@ -131,13 +136,12 @@ class AppProvider extends ChangeNotifier {
 }
 
 // --- Asumsi Implementasi DBHelper (TIDAK PERLU DI SALIN) ---
-// Anda harus memastikan ada file 'lib/database/db_helper.dart' yang berfungsi.
+// Pastikan Anda memiliki implementasi yang benar di lib/database/db_helper.dart
 class DBHelper {
   DBHelper._internal();
   static final DBHelper _instance = DBHelper._internal();
   factory DBHelper() => _instance;
 
-  // HANYA STRUKTUR PALSU, ANDA HARUS MENGISI DENGAN LOGIC SQFLITE!
   Future<void> openDb() async {}
   Future<void> insertProduk(Produk p) async {}
   Future<void> updateProduk(Produk p) async {}
@@ -154,5 +158,3 @@ class DBHelper {
   Future<void> deleteTransaksi(String id) async {}
   Future<List<Transaksi>> getTransaksiList() async => [];
 }
-
-// END ASUMSI
