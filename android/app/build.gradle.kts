@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.elokalfa"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = minSdkVersion 21
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
