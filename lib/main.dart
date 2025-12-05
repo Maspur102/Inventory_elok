@@ -6,11 +6,17 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart'; 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// Asumsi model dan provider diimpor dari file lokal
+// Import Models dan Provider dari file lokal
 import 'providers/app_provider.dart';
 import 'models/models.dart';
 
+// Fungsi confirm delete global (diambil dari salah satu potongan kode Anda)
+void _confirmDelete(BuildContext context, Function onConfirm) {
+  showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("Hapus Data?"), content: const Text("Data yang dihapus tidak bisa dikembalikan."), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")), TextButton(onPressed: () { onConfirm(); Navigator.pop(ctx); }, child: const Text("HAPUS", style: TextStyle(color: Colors.red)))]));
+}
+
 void main() {
+  // Pastikan Anda memuat data awal saat aplikasi dimulai
   runApp(
     MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => AppProvider()..loadData())],
@@ -38,11 +44,7 @@ class MyApp extends StatelessWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
         useMaterial3: true,
-        // BAGIAN CARDTHEME DIHAPUS UNTUK MENGHINDARI ERROR BUILD
-        // cardTheme: CardTheme(
-        //   elevation: 4,
-        //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        // ),
+        // BARIS cardTheme DIHAPUS (FIX ERROR BUILD)
       ),
       home: const MainScreen(),
     );
@@ -89,7 +91,8 @@ class HalamanKasir extends StatefulWidget {
   State<HalamanKasir> createState() => _HalamanKasirState();
 }
 class _HalamanKasirState extends State<HalamanKasir> {
-  Map<Produk, int> cart = {};
+  // Key = Produk, Value = Quantity
+  Map<Produk, int> cart = {}; 
   String selectedCategory = "Semua";
   String searchQuery = "";
   final TextEditingController _searchCtrl = TextEditingController();
@@ -333,6 +336,7 @@ class _HalamanKasirState extends State<HalamanKasir> {
                   }
                   
                   // Gunakan Map.from(cart)
+                  // LOGIC TRANSAKSI SUDAH DIPINDAHKAN DAN DIPERBAIKI DI app_provider.dart
                   await provider.bayarTransaksi(Map.from(cart), metode, uangFinal, pickedImage?.path);
                   
                   if (context.mounted) {
@@ -369,7 +373,6 @@ class HalamanInventaris extends StatelessWidget {
   }
 }
 
-// Lanjutan dari ListProdukView (ditemukan di potongan kode awal)
 class ListProdukView extends StatelessWidget {
   const ListProdukView({super.key});
   @override
@@ -379,108 +382,100 @@ class ListProdukView extends StatelessWidget {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showFormProduk(context, null, provider), // LENGKAPI PROMPT AWAL
-        label: const Text("Tambah Produk"),
+        onPressed: () => _showFormProduk(context, null, provider),
+        label: const Text("Produk Baru"),
         icon: const Icon(Icons.add),
         backgroundColor: const Color(0xFF00E676),
         foregroundColor: Colors.black,
       ),
-      body: provider.produkList.isEmpty
-        ? const Center(child: Text("Belum ada produk."))
-        : ListView.builder(
-            padding: const EdgeInsets.only(bottom: 80, top: 8),
-            itemCount: provider.produkList.length,
-            itemBuilder: (ctx, i) {
-              final p = provider.produkList[i];
-              return Card(
-                color: const Color(0xFF252525),
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: ListTile(
-                  title: Text(p.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Kategori: ${p.kategori}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text("Beli: ${currency.format(p.hargaBeli)} | Jual: ${currency.format(p.hargaJual)}", style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.all(8),
+      body: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 80, top: 8),
+        itemCount: provider.produkList.length,
+        itemBuilder: (ctx, i) {
+          final p = provider.produkList[i];
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))]),
+            child: ListTile(
+              title: Text(p.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Kategori: ${p.kategori}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text("Beli: ${currency.format(p.hargaModal)} | Jual: ${currency.format(p.hargaJual)}", style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(color: p.stok < 5 ? Colors.redAccent.withOpacity(0.3) : const Color(0xFF00E676).withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
                     child: Text("Stok: ${p.stok}", style: TextStyle(fontWeight: FontWeight.bold, color: p.stok < 5 ? Colors.red : const Color(0xFF00E676))),
                   ),
-                  onTap: () => _showFormProduk(context, p, provider),
-                ),
-              );
-            },
-          ),
+                  IconButton(icon: const Icon(Icons.edit, size: 20, color: Colors.blueAccent), onPressed: () => _showFormProduk(context, p, provider)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
   void _showFormProduk(BuildContext context, Produk? produk, AppProvider provider) {
     final isEdit = produk != null;
-    final namaCtrl = TextEditingController(text: produk?.nama ?? '');
-    final kategoriCtrl = TextEditingController(text: produk?.kategori ?? '');
-    final hargaBeliCtrl = TextEditingController(text: produk?.hargaBeli.toString() ?? '');
-    final hargaJualCtrl = TextEditingController(text: produk?.hargaJual.toString() ?? '');
-    final stokCtrl = TextEditingController(text: produk?.stok.toString() ?? '');
+    final namaCtrl = TextEditingController(text: isEdit ? produk.nama : '');
+    final kategoriCtrl = TextEditingController(text: isEdit ? produk.kategori : '');
+    final stokCtrl = TextEditingController(text: isEdit ? produk.stok.toString() : '');
+    final modalCtrl = TextEditingController(text: isEdit ? produk.hargaModal.toString() : '');
+    final jualCtrl = TextEditingController(text: isEdit ? produk.hargaJual.toString() : '');
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isEdit ? "Edit Produk: ${produk.nama}" : "Tambah Produk Baru"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, top: 20, left: 20, right: 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: "Nama Produk", border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: kategoriCtrl, decoration: const InputDecoration(labelText: "Kategori", border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: hargaBeliCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga Beli (Rp)", border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: hargaJualCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga Jual (Rp)", border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: stokCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Stok Awal", border: OutlineInputBorder(), hintText: isEdit ? 'Hanya bisa diisi sekali' : null), enabled: !isEdit),
+              Text(isEdit ? "Edit Produk" : "Tambah Produk Baru", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF00E676))),
+              if(isEdit)
+                 IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent), onPressed: () { Navigator.pop(ctx); _confirmDelete(context, () => provider.hapusProduk(produk.id!)); }),
             ],
           ),
-        ),
-        actions: [
-          if (isEdit) 
-            TextButton(
-              onPressed: () async {
-                await provider.hapusProduk(produk.id);
-                if (context.mounted) Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Produk dihapus!"), backgroundColor: Colors.red));
-              },
-              child: const Text("Hapus", style: TextStyle(color: Colors.red)),
-            ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black),
-            onPressed: () async {
-              if (namaCtrl.text.isEmpty || hargaJualCtrl.text.isEmpty) return;
-
-              final newProduk = Produk(
-                id: produk?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                nama: namaCtrl.text,
-                kategori: kategoriCtrl.text.isEmpty ? 'Umum' : kategoriCtrl.text,
-                hargaBeli: int.tryParse(hargaBeliCtrl.text) ?? 0,
-                hargaJual: int.tryParse(hargaJualCtrl.text) ?? 0,
-                stok: int.tryParse(stokCtrl.text) ?? (produk?.stok ?? 0),
-              );
-
-              if (isEdit) {
-                await provider.updateProduk(newProduk);
-              } else {
-                await provider.tambahProduk(newProduk);
-              }
-
-              if (context.mounted) Navigator.pop(ctx);
-            },
-            child: Text(isEdit ? "Simpan Perubahan" : "Tambah"),
-          )
-        ],
+          const SizedBox(height: 20),
+          TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: "Nama Produk", border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          TextField(controller: kategoriCtrl, decoration: const InputDecoration(labelText: "Kategori", border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: TextField(controller: stokCtrl, decoration: const InputDecoration(labelText: "Stok"), keyboardType: TextInputType.number, enabled: !isEdit)),
+            const SizedBox(width: 10), 
+            Expanded(child: TextField(controller: modalCtrl, decoration: const InputDecoration(labelText: "Harga Modal"), keyboardType: TextInputType.number))
+          ]),
+          const SizedBox(height: 10),
+          TextField(controller: jualCtrl, decoration: const InputDecoration(labelText: "Harga Jual"), keyboardType: TextInputType.number),
+          const SizedBox(height: 20),
+          SizedBox(width: double.infinity, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E676), foregroundColor: Colors.black), child: Text(isEdit ? "SIMPAN PERUBAHAN" : "TAMBAH PRODUK"), onPressed: () { 
+            if (namaCtrl.text.isNotEmpty && jualCtrl.text.isNotEmpty) { 
+              Produk p = Produk(
+                id: isEdit ? produk.id : null, 
+                nama: namaCtrl.text, 
+                kategori: kategoriCtrl.text.isEmpty ? "Umum" : kategoriCtrl.text, 
+                stok: int.tryParse(stokCtrl.text) ?? (produk?.stok ?? 0), 
+                hargaModal: int.tryParse(modalCtrl.text) ?? 0, 
+                hargaJual: int.tryParse(jualCtrl.text) ?? 0
+              ); 
+              provider.simpanProduk(p, isEdit); 
+              Navigator.pop(ctx); 
+            } 
+          })),
+          const SizedBox(height: 20),
+        ]),
       ),
     );
   }
@@ -490,252 +485,175 @@ class ListBahanView extends StatelessWidget {
   const ListBahanView({super.key});
   @override
   Widget build(BuildContext context) {
-    // Asumsi ada model BahanBaku dan fungsi di AppProvider
     final provider = Provider.of<AppProvider>(context);
     final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showFormBahan(context, null, provider),
-        label: const Text("Tambah Bahan"),
-        icon: const Icon(Icons.add),
-        backgroundColor: const Color(0xFF03DAC6),
-        foregroundColor: Colors.black,
+      floatingActionButton: FloatingActionButton.extended(onPressed: () => _dialogBelanja(context, provider), label: const Text("Belanja Bahan"), icon: const Icon(Icons.shopping_cart), backgroundColor: Colors.orangeAccent, foregroundColor: Colors.white),
+      body: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 80, top: 8),
+        itemCount: provider.bahanList.length,
+        itemBuilder: (ctx, i) {
+          final b = provider.bahanList[i];
+          return ListTile(
+            leading: const Icon(Icons.layers_outlined, color: Colors.orangeAccent), 
+            title: Text(b.nama), 
+            subtitle: Text("Beli terakhir: ${currency.format(b.hargaBeliTerakhir)} / ${b.satuan}"), 
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min, 
+              children: [
+                Text("${b.stok.toStringAsFixed(0)} ${b.satuan}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orangeAccent)), 
+                IconButton(icon: const Icon(Icons.delete_outline, color: Colors.grey), onPressed: () => _confirmDelete(context, () => provider.hapusBahan(b.id!)))
+              ]
+            )
+          );
+        },
       ),
-      body: provider.bahanList.isEmpty
-        ? const Center(child: Text("Belum ada bahan baku."))
-        : ListView.builder(
-            padding: const EdgeInsets.only(bottom: 80, top: 8),
-            itemCount: provider.bahanList.length,
-            itemBuilder: (ctx, i) {
-              final b = provider.bahanList[i];
-              return Card(
-                color: const Color(0xFF252525),
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: ListTile(
-                  title: Text(b.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("Harga: ${currency.format(b.hargaBeli)} / ${b.satuan}", style: const TextStyle(fontSize: 12)),
-                  trailing: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: b.stok < 5 ? Colors.redAccent.withOpacity(0.3) : const Color(0xFF03DAC6).withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
-                    child: Text("Stok: ${b.stok} ${b.satuan}", style: TextStyle(fontWeight: FontWeight.bold, color: b.stok < 5 ? Colors.red : const Color(0xFF03DAC6))),
-                  ),
-                  onTap: () => _showFormBahan(context, b, provider),
-                ),
-              );
-            },
-          ),
     );
   }
-
-  void _showFormBahan(BuildContext context, BahanBaku? bahan, AppProvider provider) {
-    // Implementasi Form Bahan Baku (asumsi ada model BahanBaku di models.dart)
-    final isEdit = bahan != null;
-    final namaCtrl = TextEditingController(text: bahan?.nama ?? '');
-    final hargaBeliCtrl = TextEditingController(text: bahan?.hargaBeli.toString() ?? '');
-    final stokCtrl = TextEditingController(text: bahan?.stok.toString() ?? '');
-    final satuanCtrl = TextEditingController(text: bahan?.satuan ?? '');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isEdit ? "Edit Bahan: ${bahan.nama}" : "Tambah Bahan Baku"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: "Nama Bahan", border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: hargaBeliCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Harga Beli (Rp)", border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: stokCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Stok", border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: satuanCtrl, decoration: const InputDecoration(labelText: "Satuan (contoh: kg, liter)", border: OutlineInputBorder())),
-            ],
-          ),
-        ),
-        actions: [
-          if (isEdit) 
-            TextButton(
-              onPressed: () async {
-                await provider.hapusBahan(bahan.id);
-                if (context.mounted) Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bahan dihapus!"), backgroundColor: Colors.red));
-              },
-              child: const Text("Hapus", style: TextStyle(color: Colors.red)),
-            ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF03DAC6), foregroundColor: Colors.black),
-            onPressed: () async {
-              if (namaCtrl.text.isEmpty || hargaBeliCtrl.text.isEmpty) return;
-
-              final newBahan = BahanBaku(
-                id: bahan?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                nama: namaCtrl.text,
-                hargaBeli: int.tryParse(hargaBeliCtrl.text) ?? 0,
-                stok: double.tryParse(stokCtrl.text) ?? 0,
-                satuan: satuanCtrl.text.isEmpty ? 'unit' : satuanCtrl.text,
-              );
-
-              if (isEdit) {
-                await provider.updateBahan(newBahan);
-              } else {
-                await provider.tambahBahan(newBahan);
-              }
-
-              if (context.mounted) Navigator.pop(ctx);
-            },
-            child: Text(isEdit ? "Simpan Perubahan" : "Tambah"),
-          )
-        ],
-      ),
-    );
+  void _dialogBelanja(BuildContext context, AppProvider provider) {
+    TextEditingController namaCtrl = TextEditingController();
+    TextEditingController satuanCtrl = TextEditingController(text: "kg");
+    TextEditingController jumlahCtrl = TextEditingController();
+    TextEditingController hargaCtrl = TextEditingController();
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("Catat Belanja Bahan"), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: "Nama Bahan")), TextField(controller: satuanCtrl, decoration: const InputDecoration(labelText: "Satuan")), TextField(controller: jumlahCtrl, decoration: const InputDecoration(labelText: "Jumlah Beli"), keyboardType: TextInputType.number), TextField(controller: hargaCtrl, decoration: const InputDecoration(labelText: "Total Biaya (Rp)"), keyboardType: TextInputType.number)])), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")), ElevatedButton(onPressed: () { if(namaCtrl.text.isNotEmpty && hargaCtrl.text.isNotEmpty) { provider.belanjaBahan(namaCtrl.text, satuanCtrl.text, int.tryParse(jumlahCtrl.text) ?? 0, int.tryParse(hargaCtrl.text) ?? 0); Navigator.pop(ctx); } }, child: const Text("SIMPAN"))]));
   }
 }
 
 // --- TAB 3: LAPORAN ---
 class HalamanLaporan extends StatelessWidget {
   const HalamanLaporan({super.key});
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AppProvider>(context);
     final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-    // Asumsi ada logic untuk menghitung total pendapatan/pengeluaran di provider
-    final totalPendapatan = provider.transaksiList.where((t) => t.tipe == 'Penjualan').fold<int>(0, (sum, item) => sum + item.jumlah);
-    final totalPengeluaran = provider.transaksiList.where((t) => t.tipe == 'Pembelian Bahan').fold<int>(0, (sum, item) => sum + item.jumlah);
-    final labaBersih = totalPendapatan - totalPengeluaran;
-
     return Scaffold(
-      appBar: AppBar(title: const Text("LAPORAN & ANALISIS")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // RINGKASAN KEUANGAN
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(16)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Ringkasan Keuangan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white70)),
-                  const Divider(color: Colors.white10),
-                  _buildSummaryRow("Total Penjualan", totalPendapatan, Colors.green),
-                  _buildSummaryRow("Total Pembelian Bahan", totalPengeluaran, Colors.red),
-                  const Divider(color: Colors.white10, height: 20),
-                  _buildSummaryRow("Laba Bersih", labaBersih, labaBersih >= 0 ? const Color(0xFF00E676) : Colors.redAccent, isBold: true),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // RIWAYAT TRANSAKSI
-            const Text("Riwayat Transaksi Terakhir", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white70)),
-            const Divider(color: Colors.white10),
-            provider.transaksiList.isEmpty
-              ? const Padding(padding: EdgeInsets.all(16), child: Center(child: Text("Belum ada transaksi.")))
-              : ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: provider.transaksiList.length > 10 ? 10 : provider.transaksiList.length, // Tampilkan 10 transaksi terakhir
-                  itemBuilder: (ctx, i) {
-                    final t = provider.transaksiList[i];
-                    final isPenjualan = t.tipe == 'Penjualan';
-                    return ListTile(
-                      leading: Icon(isPenjualan ? Icons.point_of_sale : Icons.shopping_bag, color: isPenjualan ? Colors.green : Colors.redAccent),
-                      title: Text("${t.tipe} (${t.metode})"),
-                      subtitle: Text(DateFormat('dd MMM yyyy, HH:mm').format(t.tanggal)),
-                      trailing: Text(
-                        "${isPenjualan ? '+' : '-'} ${currency.format(t.jumlah)}",
-                        style: TextStyle(fontWeight: FontWeight.bold, color: isPenjualan ? Colors.green : Colors.redAccent),
-                      ),
-                    );
-                  },
-                ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String title, int amount, Color color, {bool isBold = false}) {
-    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      appBar: AppBar(title: const Text("LAPORAN KEUANGAN")),
+      body: Column(
         children: [
-          Text(title, style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-          Text(currency.format(amount), style: TextStyle(fontSize: 16, color: color, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF00E676), Color(0xFF00BFA5)]), borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0,5))]),
+            child: Column(
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_summaryItem("PEMASUKAN", provider.totalPemasukan, Colors.black), Container(width: 1, height: 40, color: Colors.black26), _summaryItem("PENGELUARAN", provider.totalPengeluaran, Colors.black87)]),
+                const Divider(color: Colors.black26, height: 30),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Text("SALDO BERSIH: ", style: TextStyle(color: Colors.black54, fontWeight: FontWeight.bold)), Text(currency.format(provider.saldoBersih), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20))])
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: provider.transaksiList.length,
+              itemBuilder: (ctx, i) {
+                final t = provider.transaksiList[i];
+                bool isMasuk = t.tipe == 'MASUK';
+                return ExpansionTile(
+                  leading: CircleAvatar(backgroundColor: isMasuk ? const Color(0xFF00E676).withOpacity(0.2) : Colors.redAccent.withOpacity(0.2), child: Icon(isMasuk ? Icons.arrow_downward : Icons.arrow_upward, color: isMasuk ? const Color(0xFF00E676) : Colors.redAccent)),
+                  title: Text(t.deskripsi, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text("${t.metodeBayar} • ${t.tanggal.substring(0, 16)}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  trailing: Text("${isMasuk ? '+' : '-'} ${currency.format(t.nominal)}", style: TextStyle(color: isMasuk ? const Color(0xFF00E676) : Colors.redAccent, fontWeight: FontWeight.bold)),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        alignment: WrapAlignment.spaceEvenly,
+                        children: [
+                          // Tombol Struk
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.receipt),
+                            label: const Text("Struk"),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                            onPressed: () => _showDetailTransaksi(context, t),
+                          ),
+                          // Tombol Lihat Bukti Foto
+                          if (t.buktiFoto != null && t.buktiFoto!.isNotEmpty)
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.image),
+                              label: const Text("Bukti"),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                              onPressed: () => _showImageDialog(context, t.buktiFoto!),
+                            ),
+                          // Tombol Edit
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.edit),
+                            label: const Text("Edit"),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                            onPressed: () => _showEditDialog(context, t, provider),
+                          ),
+                          // Tombol Hapus
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.delete),
+                            label: const Text("Hapus"),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                            onPressed: () => _confirmDelete(context, () => provider.hapusTransaksi(t.id!)),
+                          ),
+                        ],
+                      ),
+                    )
+                  ],
+                );
+              },
+            ),
+          )
         ],
       ),
     );
   }
-}
 
-// --- ASUMSI MODEL (harus ada di file models/models.dart) ---
-// Note: Karena saya tidak melihat isi files models/models.dart dan providers/app_provider.dart,
-// saya hanya bisa mengasumsikan strukturnya. Anda harus memastikan file tersebut ada dan memiliki kelas
-// Produk, BahanBaku, dan Transaksi, serta fungsi tambah/update/hapus di AppProvider.
+  void _showDetailTransaksi(BuildContext context, Transaksi t) {
+    // Dialog Cetak Struk
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Center(child: Text("STRUK TRANSAKSI", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Text("ELOK ALFA CHIPS", style: GoogleFonts.courierPrime(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black))),
+              const Divider(color: Colors.black),
+              Text("Tgl: ${t.tanggal.substring(0,16)}", style: GoogleFonts.courierPrime(fontSize: 12, color: Colors.black)),
+              Text("Metode: ${t.metodeBayar}", style: GoogleFonts.courierPrime(fontSize: 12, color: Colors.black)),
+              Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text("--------------------------------", style: GoogleFonts.courierPrime(color: Colors.black), maxLines: 1, overflow: TextOverflow.clip)),
+              ...t.deskripsi.split(", ").map((item) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(item, style: GoogleFonts.courierPrime(fontSize: 14, color: Colors.black)))),
+              Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text("--------------------------------", style: GoogleFonts.courierPrime(color: Colors.black), maxLines: 1, overflow: TextOverflow.clip)),
 
-/*
-// Contoh Asumsi Struktur Model:
-class Produk {
-  final String id;
-  final String nama;
-  final String kategori;
-  final int hargaBeli;
-  final int hargaJual;
-  final int stok; // harusnya diubah jika ingin update stok
-
-  Produk({required this.id, required this.nama, required this.kategori, required this.hargaBeli, required this.hargaJual, required this.stok});
-}
-
-class BahanBaku {
-  final String id;
-  final String nama;
-  final int hargaBeli;
-  final double stok;
-  final String satuan;
-
-  BahanBaku({required this.id, required this.nama, required this.hargaBeli, required this.stok, required this.satuan});
-}
-
-class Transaksi {
-  final String id;
-  final String tipe; // 'Penjualan' atau 'Pembelian Bahan'
-  final int jumlah;
-  final String metode;
-  final DateTime tanggal;
-
-  Transaksi({required this.id, required this.tipe, required this.jumlah, required this.metode, required this.tanggal});
-}
-
-// Contoh Asumsi Struktur AppProvider:
-class AppProvider extends ChangeNotifier {
-  List<Produk> produkList = [];
-  List<BahanBaku> bahanList = [];
-  List<Transaksi> transaksiList = [];
-
-  void loadData() {
-    // Logic untuk memuat data dari database/storage
-    // ...
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("TOTAL", style: GoogleFonts.courierPrime(fontWeight: FontWeight.bold, color: Colors.black)), Text(currency.format(t.nominal), style: GoogleFonts.courierPrime(fontWeight: FontWeight.bold, color: Colors.black))]),
+              if(t.metodeBayar == "Tunai") ...[
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("TUNAI", style: GoogleFonts.courierPrime(color: Colors.black)), Text(currency.format(t.uangDiterima), style: GoogleFonts.courierPrime(color: Colors.black))]),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("KEMBALI", style: GoogleFonts.courierPrime(color: Colors.black)), Text(currency.format(t.uangDiterima - t.nominal), style: GoogleFonts.courierPrime(color: Colors.black))]),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Tutup")),
+          ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white), icon: const Icon(Icons.print), label: const Text("Cetak"), onPressed: () { Navigator.pop(ctx); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sedang Mencetak... (Simulasi)"))); })
+        ],
+      ),
+    );
   }
-  Future<void> tambahProduk(Produk p) async { /* ... */ notifyListeners(); }
-  Future<void> updateProduk(Produk p) async { /* ... */ notifyListeners(); }
-  Future<void> hapusProduk(String id) async { /* ... */ notifyListeners(); }
-  
-  Future<void> tambahBahan(BahanBaku b) async { /* ... */ notifyListeners(); }
-  Future<void> updateBahan(BahanBaku b) async { /* ... */ notifyListeners(); }
-  Future<void> hapusBahan(String id) async { /* ... */ notifyListeners(); }
 
-  Future<void> bayarTransaksi(Map<Produk, int> cart, String metode, int jumlahBayar, String? buktiPath) async { 
-    // Logic untuk memproses pembayaran, mengurangi stok, dan mencatat transaksi.
-    // ...
-    notifyListeners();
+  void _showImageDialog(BuildContext context, String path) {
+    showDialog(context: context, builder: (ctx) => Dialog(child: kIsWeb ? Image.network(path) : Image.file(File(path))));
+  }
+
+  void _showEditDialog(BuildContext context, Transaksi t, AppProvider provider) {
+    final descCtrl = TextEditingController(text: t.deskripsi);
+    final nomCtrl = TextEditingController(text: t.nominal.toString());
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("Edit Transaksi"), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: descCtrl, decoration: const InputDecoration(labelText: "Deskripsi")), TextField(controller: nomCtrl, decoration: const InputDecoration(labelText: "Nominal"), keyboardType: TextInputType.number)]), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")), ElevatedButton(onPressed: () { Transaksi updated = Transaksi(id: t.id, tipe: t.tipe, deskripsi: descCtrl.text, nominal: int.tryParse(nomCtrl.text) ?? 0, tanggal: t.tanggal, metodeBayar: t.metodeBayar, uangDiterima: t.uangDiterima, buktiFoto: t.buktiFoto); provider.updateTransaksi(updated); Navigator.pop(ctx); }, child: const Text("SIMPAN"))]));
+  }
+
+  Widget _summaryItem(String label, int value, Color color) {
+    final currency = NumberFormat.compact(locale: 'id_ID').format(value);
+    return Column(children: [Text(label, style: TextStyle(fontSize: 10, color: color.withOpacity(0.6))), const SizedBox(height: 5), Text("Rp $currency", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color))]);
   }
 }
-*/

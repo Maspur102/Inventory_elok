@@ -1,151 +1,158 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:intl/intl.dart';
+// Asumsi Anda memiliki file db_helper.dart
+import '../database/db_helper.dart'; 
 import '../models/models.dart';
-import '../database/db_helper.dart';
 
-class AppProvider with ChangeNotifier {
-  final DbHelper _db = DbHelper();
+class AppProvider extends ChangeNotifier {
+  final DBHelper _dbHelper = DBHelper();
   
-  List<BahanBaku> _bahanList = [];
   List<Produk> _produkList = [];
+  List<BahanBaku> _bahanList = [];
   List<Transaksi> _transaksiList = [];
-  
-  List<BahanBaku> get bahanList => _bahanList;
-  List<Produk> get produkList => _produkList;
-  List<Transaksi> get transaksiList => _transaksiList;
 
-  int get totalPemasukan => _transaksiList.where((t) => t.tipe == 'MASUK').fold(0, (sum, t) => sum + t.nominal);
-  int get totalPengeluaran => _transaksiList.where((t) => t.tipe == 'KELUAR').fold(0, (sum, t) => sum + t.nominal);
+  List<Produk> get produkList => _produkList;
+  List<BahanBaku> get bahanList => _bahanList;
+  List<Transaksi> get transaksiList => _transaksiList.reversed.toList(); // Transaksi terbaru di atas
+
+  int get totalPemasukan => _transaksiList.where((t) => t.tipe == 'MASUK').fold(0, (sum, item) => sum + item.nominal);
+  int get totalPengeluaran => _transaksiList.where((t) => t.tipe == 'KELUAR').fold(0, (sum, item) => sum + item.nominal);
   int get saldoBersih => totalPemasukan - totalPengeluaran;
 
   Future<void> loadData() async {
-    if (kIsWeb) {
-      if (_produkList.isEmpty) {
-        _produkList = [
-          Produk(id: 1, nama: "Kripik Coklat", kategori: "Manis", hargaModal: 3000, hargaJual: 5000, stok: 20),
-          Produk(id: 2, nama: "Kripik Balado", kategori: "Pedas", hargaModal: 3000, hargaJual: 5000, stok: 15),
-        ];
-        _bahanList = [
-          BahanBaku(id: 1, nama: "Pisang Mentah", satuan: "Sisir", stok: 20, hargaBeliTerakhir: 15000),
-        ];
-      }
-    } else {
-      _bahanList = await _db.getBahan();
-      _produkList = await _db.getProduk();
-      // PENTING: Ambil data transaksi terbaru dari DB
-      _transaksiList = await _db.getTransaksi();
-    }
+    await _dbHelper.openDb();
+    _produkList = await _dbHelper.getProdukList();
+    _bahanList = await _dbHelper.getBahanList();
+    _transaksiList = await _dbHelper.getTransaksiList();
     notifyListeners();
   }
 
   // --- CRUD PRODUK ---
-  Future<void> simpanProduk(Produk p, bool isEdit) async {
+  Future<void> simpanProduk(Produk produk, bool isEdit) async {
     if (isEdit) {
-      int index = _produkList.indexWhere((element) => element.id == p.id);
-      if (index != -1) {
-        if (!kIsWeb) await _db.updateProduk(p);
-      }
+      await _dbHelper.updateProduk(produk);
     } else {
-      if (!kIsWeb) {
-        await _db.insertProduk(p);
-      } else {
-        // Dummy web logic
-        int newId = DateTime.now().millisecondsSinceEpoch;
-        Produk baru = Produk(id: newId, nama: p.nama, kategori: p.kategori, hargaModal: p.hargaModal, hargaJual: p.hargaJual, stok: p.stok);
-        _produkList.add(baru);
-      }
+      produk.id = DateTime.now().millisecondsSinceEpoch.toString();
+      await _dbHelper.insertProduk(produk);
     }
-    // Refresh semua data untuk memastikan ID sinkron
-    await loadData();
+    await loadData(); // Reload data
   }
 
-  Future<void> hapusProduk(int id) async {
-    if (!kIsWeb) await _db.deleteProduk(id);
+  Future<void> hapusProduk(String id) async {
+    await _dbHelper.deleteProduk(id);
     await loadData();
   }
-
+  
   // --- CRUD BAHAN ---
+  Future<void> hapusBahan(String id) async {
+    await _dbHelper.deleteBahan(id);
+    await loadData();
+  }
+
   Future<void> belanjaBahan(String nama, String satuan, int jumlah, int totalHarga) async {
-    // 1. Simpan Transaksi
-    Transaksi trxDraft = Transaksi(
-      tipe: 'KELUAR', 
-      deskripsi: 'Beli $jumlah $satuan $nama', 
-      nominal: totalHarga, 
-      tanggal: DateTime.now().toString(),
-      metodeBayar: 'Tunai',
-      uangDiterima: totalHarga
-    );
-
-    if (!kIsWeb) await _db.insertTransaksi(trxDraft);
+    final BahanBaku? existingBahan = _bahanList.firstWhere((b) => b.nama.toLowerCase() == nama.toLowerCase(), orElse: () => BahanBaku(nama: '', satuan: '', stok: 0, hargaBeliTerakhir: 0));
     
-    // 2. Update Stok Bahan
-    // Kita load dulu bahan terbaru dari DB agar tidak duplikat
-    await loadData(); 
-    
-    int index = _bahanList.indexWhere((b) => b.nama.toLowerCase() == nama.toLowerCase());
-    if (index != -1) {
-      BahanBaku update = _bahanList[index];
-      update.stok += jumlah;
-      update.hargaBeliTerakhir = (totalHarga / jumlah).round();
-      if (!kIsWeb) await _db.updateBahan(update);
+    if (existingBahan.id != null) {
+      existingBahan.stok += jumlah.toDouble();
+      existingBahan.hargaBeliTerakhir = totalHarga;
+      await _dbHelper.updateBahan(existingBahan);
     } else {
-      BahanBaku baru = BahanBaku(id: null, nama: nama, satuan: satuan, stok: jumlah, hargaBeliTerakhir: (totalHarga / jumlah).round());
-      if (!kIsWeb) await _db.insertBahan(baru);
+      final newBahan = BahanBaku(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        nama: nama,
+        satuan: satuan,
+        stok: jumlah.toDouble(),
+        hargaBeliTerakhir: totalHarga,
+      );
+      await _dbHelper.insertBahan(newBahan);
     }
-
-    // 3. FORCE REFRESH agar tampil di history
-    await loadData();
-  }
-
-  Future<void> hapusBahan(int id) async {
-    if (!kIsWeb) await _db.deleteBahan(id);
-    await loadData();
-  }
-
-  // --- TRANSAKSI KASIR (FIX HISTORY KOSONG) ---
-  Future<void> bayarTransaksi(Map<Produk, int> cart, String metode, int uangDiterima, String? buktiFoto) async {
-    int totalUang = 0;
-    List<String> detailItems = [];
-
-    for (var entry in cart.entries) {
-      Produk p = entry.key;
-      int qty = entry.value;
-      
-      // Update stok produk
-      p.stok -= qty;
-      if (!kIsWeb) await _db.updateProduk(p);
-      
-      totalUang += (p.hargaJual * qty);
-      detailItems.add("${p.nama} x$qty");
-    }
-
-    String deskripsi = detailItems.join(", ");
-
-    Transaksi trx = Transaksi(
-      tipe: 'MASUK', 
-      deskripsi: deskripsi, 
-      nominal: totalUang, 
-      tanggal: DateTime.now().toString(),
-      metodeBayar: metode,
-      uangDiterima: uangDiterima,
-      buktiFoto: buktiFoto
+    
+    // Mencatat transaksi pembelian bahan (KELUAR)
+    final transaksi = Transaksi(
+      tipe: 'KELUAR',
+      deskripsi: 'Pembelian Bahan: $nama ($jumlah $satuan)',
+      nominal: totalHarga,
+      tanggal: DateTime.now().toIso8601String(),
+      metodeBayar: 'Tunai', // Default tunai untuk pembelian
     );
+    await _dbHelper.insertTransaksi(transaksi);
 
-    // Simpan ke DB
-    if (!kIsWeb) await _db.insertTransaksi(trx);
-
-    // KUNCI PERBAIKAN: Panggil loadData() untuk menarik ulang data dari DB ke Layar
     await loadData();
   }
 
-  // --- EDIT & HAPUS TRANSAKSI ---
-  Future<void> hapusTransaksi(int id) async {
-    if (!kIsWeb) await _db.deleteTransaksi(id);
-    await loadData();
-  }
-
+  // --- CRUD TRANSAKSI ---
   Future<void> updateTransaksi(Transaksi t) async {
-    if (!kIsWeb) await _db.updateTransaksi(t);
+    await _dbHelper.updateTransaksi(t);
+    await loadData();
+  }
+
+  Future<void> hapusTransaksi(String id) async {
+    await _dbHelper.deleteTransaksi(id);
+    await loadData();
+  }
+  
+  // --- LOGIC PEMBAYARAN KASIR (PERBAIKAN UTAMA) ---
+  Future<void> bayarTransaksi(Map<Produk, int> cart, String metode, int uangDiterima, String? buktiPath) async {
+    if (cart.isEmpty) return;
+
+    int totalTagihan = 0;
+    List<String> deskripsiItems = [];
+
+    // 1. Hitung total dan update stok produk
+    for (var entry in cart.entries) {
+      final produk = entry.key;
+      final quantity = entry.value;
+      totalTagihan += (produk.hargaJual * quantity);
+      deskripsiItems.add("${produk.nama} (${quantity}x)");
+
+      // Update stok
+      produk.stok -= quantity;
+      await _dbHelper.updateProduk(produk);
+    }
+    
+    // 2. Buat objek Transaksi (TIPE MASUK)
+    final Transaksi transaksiBaru = Transaksi(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      tipe: 'MASUK', // Pemasukan dari Penjualan
+      deskripsi: deskripsiItems.join(", "), // Contoh: "Keripik (2x), Saus (1x)"
+      nominal: totalTagihan,
+      tanggal: DateTime.now().toIso8601String(),
+      metodeBayar: metode,
+      uangDiterima: (metode == 'Tunai') ? uangDiterima : totalTagihan,
+      buktiFoto: buktiPath,
+    );
+    
+    // 3. Simpan transaksi ke database
+    await _dbHelper.insertTransaksi(transaksiBaru);
+
+    // 4. Reload data untuk update UI (Kasir & Laporan)
     await loadData();
   }
 }
+
+// --- Asumsi Implementasi DBHelper (TIDAK PERLU DI SALIN) ---
+// Anda harus memastikan ada file 'lib/database/db_helper.dart' yang berfungsi.
+class DBHelper {
+  DBHelper._internal();
+  static final DBHelper _instance = DBHelper._internal();
+  factory DBHelper() => _instance;
+
+  // HANYA STRUKTUR PALSU, ANDA HARUS MENGISI DENGAN LOGIC SQFLITE!
+  Future<void> openDb() async {}
+  Future<void> insertProduk(Produk p) async {}
+  Future<void> updateProduk(Produk p) async {}
+  Future<void> deleteProduk(String id) async {}
+  Future<List<Produk>> getProdukList() async => []; 
+
+  Future<void> insertBahan(BahanBaku b) async {}
+  Future<void> updateBahan(BahanBaku b) async {}
+  Future<void> deleteBahan(String id) async {}
+  Future<List<BahanBaku>> getBahanList() async => [];
+
+  Future<void> insertTransaksi(Transaksi t) async {}
+  Future<void> updateTransaksi(Transaksi t) async {}
+  Future<void> deleteTransaksi(String id) async {}
+  Future<List<Transaksi>> getTransaksiList() async => [];
+}
+
+// END ASUMSI
